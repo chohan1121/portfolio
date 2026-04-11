@@ -1,0 +1,645 @@
+/* ===========================
+CSS変数（カラー・サイズの一元管理）
+ここの色を変えるだけでサイト全体の色が変わる
+使い方: color: var(--primary); のように書く
+=========================== */
+:root {
+  --primary: #4f46e5; /* メインカラー（紫） */
+  --primary-light: #818cf8; /* メインカラーの薄い版 */
+  --primary-bg: #eef2ff; /* ヒーロー背景色（薄い紫） */
+  --accent-pink: #ec4899; /* アクセントカラー（ピンク）※現在未使用 */
+  --accent-teal: #14b8a6; /* アクセントカラー（ティール）※現在未使用 */
+  --accent-amber: #f59e0b; /* アクセントカラー（アンバー）※現在未使用 */
+  --text-main: #111827; /* メインテキスト色（ほぼ黒） */
+  --text-sub: #6b7280; /* サブテキスト色（グレー） */
+  --bg: #f9fafb; /* ページ全体の背景色 */
+  --white: #ffffff; /* 白 */
+  --border: #e5e7eb; /* 枠線・区切り線の色 */
+  --radius: 16px; /* カードの角丸（大） */
+  --radius-sm: 8px; /* カードの角丸（小） */
+}
+
+/* ===========================
+リセットCSS & ベーススタイル
+ブラウザのデフォルト余白をゼロにして
+ページ全体の基本スタイルを設定している
+=========================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ページ内リンクをなめらかにスクロールする */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Noto Sans JP", sans-serif; /* 全体のフォント */
+  background: var(--bg); /* ページ背景色 */
+  color: var(--text-main); /* 全体の文字色 */
+  line-height: 1.7; /* 行間 */
+}
+
+/* ===========================
+ナビゲーションバー CSS
+画面上部に固定されるメニューバー
+スクロールしても常に表示される（sticky）
+=========================== */
+nav {
+  position: sticky; /* スクロールしても上部に固定 */
+  top: 0;
+  z-index: 100; /* 他の要素より前面に表示 */
+  background: rgba(255, 255, 255, 0.9); /* 半透明の白背景 */
+  backdrop-filter: blur(12px); /* 背後をすりガラス風にぼかす */
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between; /* 左右に振り分け */
+  align-items: center; /* 上下中央揃え */
+  height: 60px;
+}
+
+/* ナビ左側のロゴテキスト「張 帆」 */
+.nav-logo {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: -0.5px;
+}
+
+/* ナビ右側のリンクメニュー */
+.nav-links {
+  display: flex;
+  gap: 28px;
+  list-style: none; /* リストの点（●）を非表示 */
+}
+
+/* ナビリンクの通常状態 */
+.nav-links a {
+  text-decoration: none; /* 下線なし */
+  font-size: 14px;
+  color: var(--text-sub);
+  transition: color 0.2s; /* ホバー時の色変化をなめらかに */
+}
+
+/* ナビリンクにマウスを乗せたとき */
+.nav-links a:hover {
+  color: var(--primary);
+}
+
+/* ===========================
+ヒーローセクション CSS
+ページ最上部の自己紹介エリア
+名前・アバター・バッジが表示される
+=========================== */
+.hero {
+  background: var(--primary-bg); /* 薄い紫の背景 */
+  padding: 80px 24px 60px;
+  text-align: center;
+  position: relative; /* ::before / ::after の基準点 */
+  overflow: hidden; /* 装飾の円がはみ出ないようにする */
+}
+
+/* 装飾：右上の薄い青い円（CSSだけで描いている飾り） */
+.hero::before {
+  content: ""; /* 疑似要素に必須 */
+  position: absolute;
+  top: -80px;
+  right: -80px;
+  width: 300px;
+  height: 300px;
+  background: #c7d2fe;
+  border-radius: 50%; /* 円形にする */
+  opacity: 0.4; /* 薄く表示 */
+}
+
+/* 装飾：左下の薄い黄色い円 */
+.hero::after {
+  content: "";
+  position: absolute;
+  bottom: -60px;
+  left: -60px;
+  width: 200px;
+  height: 200px;
+  background: #fde68a;
+  border-radius: 50%;
+  opacity: 0.3;
+}
+
+/* アバター（名前の漢字一文字を丸く表示） */
+.avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%; /* 完全な円 */
+  background: var(--primary);
+  color: white;
+  font-size: 36px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px; /* 左右中央＋下に余白 */
+  position: relative;
+  z-index: 1; /* 装飾の円より前面に表示 */
+  border: 4px solid white;
+  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.25); /* 薄い影 */
+}
+
+/* 名前（h1）のスタイル */
+.hero h1 {
+  font-size: 40px;
+  font-weight: 700;
+  color: #1e1b4b;
+  letter-spacing: 2px; /* 文字間隔を広げて見栄えよく */
+  position: relative;
+  z-index: 1;
+}
+
+/* 名前のふりがな */
+.hero-ruby {
+  font-size: 14px;
+  color: var(--primary-light);
+  letter-spacing: 3px;
+  margin-top: 4px;
+  position: relative;
+  z-index: 1;
+}
+
+/* キャッチコピー（Developer & Researcher ...） */
+.hero-tagline {
+  font-size: 15px;
+  color: var(--text-sub);
+  margin: 16px 0 24px;
+  position: relative;
+  z-index: 1;
+}
+
+/* バッジ（個人事業主・研究者・インターン中...）の並びエリア */
+.hero-tags {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap; /* 画面が狭いとき折り返す */
+  position: relative;
+  z-index: 1;
+}
+
+/* バッジの共通スタイル（丸い pill 型） */
+.badge {
+  font-size: 13px;
+  padding: 5px 14px;
+  border-radius: 99px; /* 完全な丸みでピル型に */
+  font-weight: 500;
+}
+
+/* 各バッジの色（背景色と文字色のセット） */
+.badge-purple {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+.badge-blue {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.badge-pink {
+  background: #fce7f3;
+  color: #be185d;
+}
+.badge-green {
+  background: #d1fae5;
+  color: #065f46;
+}
+.badge-amber {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* ===========================
+セクション共通 CSS
+About・スキル・実績・連絡 の共通スタイル
+=========================== */
+section {
+  max-width: 680px; /* コンテンツが広がりすぎないよう制限 */
+  margin: 0 auto; /* 左右中央寄せ */
+  padding: 48px 24px;
+}
+
+/* セクションの小さいラベル（"about me" "skills" など） */
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase; /* 小文字で書いても大文字で表示 */
+  color: var(--primary);
+  margin-bottom: 6px;
+}
+
+/* セクションのタイトル（「自己紹介」「スキル」など） */
+.section-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 24px;
+}
+
+/* セクション間の区切り線 */
+.divider {
+  height: 1px;
+  background: var(--border);
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+/* ===========================
+About（自己紹介）セクション CSS
+=========================== */
+.about-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+}
+
+.about-card p {
+  font-size: 15px;
+  color: var(--text-sub);
+  line-height: 1.9;
+}
+
+/* 2つ目以降の段落の上だけ余白をつける */
+.about-card p + p {
+  margin-top: 12px;
+}
+
+/* ===========================
+スキルセクション CSS
+2列グリッドのカードレイアウト
+=========================== */
+.skill-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* 均等な2列 */
+  gap: 12px;
+}
+
+/* スキルカード本体 */
+.skill-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s; /* ホバーアニメーション準備 */
+}
+
+/* スキルカードにマウスを乗せたとき（浮き上がる） */
+.skill-card:hover {
+  transform: translateY(-2px); /* 上に2pxずらす */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); /* 影を追加 */
+}
+
+/* スキル名と「学習中」を左右に並べるエリア */
+.skill-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.skill-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+.skill-level {
+  font-size: 11px;
+  color: var(--text-sub);
+}
+
+/* スキルバーの背景（グレーのレール） */
+.skill-bar-bg {
+  height: 6px;
+  background: #f3f4f6;
+  border-radius: 99px;
+}
+
+/* スキルバーの実際のゲージ（style="width:XX%" で長さを変える） */
+.skill-bar {
+  height: 6px;
+  background: linear-gradient(90deg, var(--primary), var(--primary-light));
+  border-radius: 99px;
+  transition: width 1s ease;
+}
+
+/* スキルカード下部の補足テキスト */
+.skill-tag {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-sub);
+}
+
+/* ===========================
+実績セクション CSS
+縦に並ぶカードレイアウト
+=========================== */
+.works-list {
+  display: flex;
+  flex-direction: column; /* 縦並び */
+  gap: 12px;
+}
+
+/* 実績カード本体（アイコン＋テキストを横並び） */
+.work-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+
+/* 実績カードにマウスを乗せたとき */
+.work-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* 実績カード左側のアイコン正方形 */
+.work-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0; /* flexで縮まないよう固定 */
+}
+
+/* アイコンの背景色（3種類） */
+.work-icon-purple {
+  background: #ede9fe;
+}
+.work-icon-blue {
+  background: #dbeafe;
+}
+.work-icon-green {
+  background: #d1fae5;
+}
+
+.work-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+.work-sub {
+  font-size: 13px;
+  color: var(--text-sub);
+  margin-top: 2px;
+}
+
+/* 実績カード下部の技術タグ（HTML・CSS・JavaScriptなど） */
+.work-tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.work-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: #f3f4f6;
+  color: var(--text-sub);
+}
+
+/* ===========================
+連絡（Contact）セクション CSS
+紫の背景カード＋メールボタン
+=========================== */
+.contact-card {
+  background: var(--primary); /* 紫背景 */
+  border-radius: var(--radius);
+  padding: 40px 28px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 装飾：右上の半透明の白い円 */
+.contact-card::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 160px;
+  height: 160px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+}
+
+.contact-card h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.contact-card p {
+  font-size: 14px;
+  color: #a5b4fc;
+  margin-bottom: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+/* メールボタン */
+.contact-btn {
+  display: inline-block;
+  background: white;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 32px;
+  border-radius: 99px;
+  text-decoration: none;
+  transition: transform 0.2s;
+  position: relative;
+  z-index: 1;
+}
+
+/* メールボタンにマウスを乗せたとき（少し大きくなる） */
+.contact-btn:hover {
+  transform: scale(1.04);
+}
+
+/* ===========================
+QRコードセクション CSS
+=========================== */
+.qr-section {
+  text-align: center;
+  padding: 32px 24px;
+}
+
+/* QRコードの仮置き枠（ここに <img> を入れて差し替える） */
+.qr-placeholder {
+  width: 120px;
+  height: 120px;
+  border: 2px dashed var(--border); /* 破線の枠 */
+  border-radius: var(--radius-sm);
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.qr-note {
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
+/* ===========================
+フッター CSS
+ページ最下部の濃い紫エリア
+=========================== */
+footer {
+  background: #1e1b4b; /* 濃い紫 */
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.footer-name {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+
+.footer-sub {
+  font-size: 13px;
+  color: #a5b4fc;
+  margin-bottom: 20px;
+}
+
+/* フッターのリンクメニュー */
+.footer-links {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+.footer-links a {
+  font-size: 13px;
+  color: #818cf8;
+  text-decoration: none;
+}
+
+.footer-links a:hover {
+  color: white;
+}
+
+/* ===========================
+アニメーション CSS
+ページ読み込み時にヒーローの要素が
+下から順番にふわっと出てくる
+=========================== */
+
+/* fadeUp：下から上に浮かび上がるアニメーションの定義 */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  } /* 始まり：透明＋下にずれ */
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  } /* 終わり：通常表示 */
+}
+
+/* ヒーロー内の全要素にfadeUpを適用 */
+.hero > * {
+  animation: fadeUp 0.6s ease both;
+}
+
+/* 要素ごとに開始タイミングをずらして順番に出す */
+.hero .avatar {
+  animation-delay: 0.1s;
+}
+.hero h1 {
+  animation-delay: 0.2s;
+}
+.hero .hero-ruby {
+  animation-delay: 0.25s;
+}
+.hero .hero-tagline {
+  animation-delay: 0.3s;
+}
+.hero .hero-tags {
+  animation-delay: 0.4s;
+}
+
+/* ===========================
+スクロールアニメーション CSS
+.fade-up クラスを持つ要素が
+スクロールで画面に入ったときにふわっと出る
+（JavaScriptのIntersectionObserverと連携）
+=========================== */
+
+/* 初期状態：透明で下にずれている */
+.fade-up {
+  opacity: 0;
+  transform: translateY(32px);
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+}
+
+/* JSで .visible が追加されると通常表示になる */
+.fade-up.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 同じ親の中で2・3・4番目の要素は少し遅れて出る（時間差演出） */
+.fade-up:nth-child(2) {
+  transition-delay: 0.1s;
+}
+.fade-up:nth-child(3) {
+  transition-delay: 0.2s;
+}
+.fade-up:nth-child(4) {
+  transition-delay: 0.3s;
+}
+
+/* ===========================
+レスポンシブ CSS
+画面幅が480px以下（スマホ）のときだけ適用
+=========================== */
+@media (max-width: 480px) {
+  .hero h1 {
+    font-size: 28px;
+  } /* 名前を小さく */
+  .skill-grid {
+    grid-template-columns: 1fr;
+  } /* スキルを1列に */
+  nav {
+    padding: 0 16px;
+  }
+  .nav-links {
+    gap: 16px;
+  }
+}

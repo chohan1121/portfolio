@@ -896,3 +896,134 @@ body.admin-mode {
 /* ===========================
   /管理者：アイテム追加モーダル
 =========================== */
+
+/* ===========================
+   管理者：削除ボタン
+=========================== */
+.admin-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #fee2e2;
+  color: #dc2626;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition:
+    opacity 0.2s,
+    background 0.2s;
+  padding: 0;
+  line-height: 1;
+}
+
+/* カードにホバーしたときだけゴミ箱を表示 */
+.work-card:hover .admin-delete-btn {
+  opacity: 1;
+}
+
+.admin-delete-btn:hover {
+  background: #fca5a5;
+}
+
+/* 管理モードバッジ：ホバーで解除できることを示す */
+.admin-badge:hover {
+  background: #dc2626;
+  transition: background 0.2s;
+}
+
+/* ===========================
+   自己紹介・スキル編集機能 CSS
+=========================== */
+
+/* 自己紹介：編集中のテキスト */
+.editable-active {
+  outline: 2px dashed #818cf8;
+  border-radius: 4px;
+  padding: 4px 6px;
+  cursor: text;
+  transition: outline 0.2s;
+}
+
+.editable-active:focus {
+  outline: 2px solid #4f46e5;
+  background: #f5f3ff;
+}
+
+/* スキルカード：編集・削除ボタン共通 */
+.skill-edit-btn,
+.skill-delete-btn {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  padding: 0;
+  line-height: 1;
+}
+
+.skill-card:hover .skill-edit-btn,
+.skill-card:hover .skill-delete-btn {
+  opacity: 1;
+}
+
+.skill-edit-btn {
+  top: 8px;
+  right: 36px;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.skill-delete-btn {
+  top: 8px;
+  right: 8px;
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.skill-edit-btn:hover {
+  background: #93c5fd;
+}
+.skill-delete-btn:hover {
+  background: #fca5a5;
+}
+
+/* スキル追加ボタン */
+.admin-skill-add-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 2px dashed #818cf8;
+  border-radius: 8px;
+  color: #4f46e5;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  grid-column: 1 / -1;
+}
+
+.admin-skill-add-btn:hover {
+  background: #eef2ff;
+}
+
+/* スキル編集モーダルのレンジスライダー */
+.skill-range {
+  width: 100%;
+  margin-bottom: 14px;
+  accent-color: #4f46e5;
+}

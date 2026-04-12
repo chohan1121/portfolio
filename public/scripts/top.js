@@ -135,6 +135,7 @@ function enableAdminMode() {
   isAdminMode = true;
   showAdminBadge();
   showAdminButtons();
+  showDeleteButtons();
   document.body.classList.add("admin-mode");
 }
 
@@ -142,9 +143,31 @@ function showAdminBadge() {
   const nav = document.querySelector("nav");
   const badge = document.createElement("span");
   badge.className = "admin-badge";
-  badge.textContent = "管理モード中";
+  badge.textContent = "管理モード中 ✕";
   badge.id = "adminBadge";
+  badge.title = "クリックで管理モードを解除";
+  badge.style.cursor = "pointer";
+  badge.addEventListener("click", () => {
+    if (confirm("管理モードを解除しますか？")) {
+      disableAdminMode();
+    }
+  });
   nav.appendChild(badge);
+}
+
+function disableAdminMode() {
+  isAdminMode = false;
+  document.body.classList.remove("admin-mode");
+
+  // バッジを削除
+  const badge = document.getElementById("adminBadge");
+  if (badge) badge.remove();
+
+  // ＋追加ボタンを削除
+  document.querySelectorAll(".admin-add-btn").forEach((btn) => btn.remove());
+
+  // ゴミ箱ボタンを削除
+  document.querySelectorAll(".admin-delete-btn").forEach((btn) => btn.remove());
 }
 
 function showAdminButtons() {
@@ -158,6 +181,36 @@ function showAdminButtons() {
     });
     section.appendChild(addBtn);
   });
+}
+
+// 管理者モード：既存カードにゴミ箱ボタンを表示
+function showDeleteButtons() {
+  document
+    .querySelectorAll(".work-card[data-admin-added='true']")
+    .forEach((card) => {
+      attachDeleteButton(card);
+    });
+}
+
+// カード1枚にゴミ箱ボタンを付ける
+function attachDeleteButton(card) {
+  // 二重追加防止
+  if (card.querySelector(".admin-delete-btn")) return;
+  const btn = document.createElement("button");
+  btn.className = "admin-delete-btn";
+  btn.title = "削除";
+  btn.textContent = "🗑";
+  btn.addEventListener("click", () => {
+    if (!confirm("このカードを削除しますか？")) return;
+    card.style.transition = "opacity 0.3s";
+    card.style.opacity = "0";
+    setTimeout(() => {
+      card.remove();
+      saveCardsToServer();
+    }, 300);
+  });
+  card.style.position = "relative";
+  card.appendChild(btn);
 }
 
 // ===========================
@@ -309,6 +362,12 @@ function buildWorkCard(item) {
 
   card.appendChild(iconDiv);
   card.appendChild(body);
+
+  // 管理者モード中に生成されたカードには即ゴミ箱ボタンを付ける
+  if (isAdminMode) {
+    attachDeleteButton(card);
+  }
+
   return card;
 }
 
@@ -328,39 +387,30 @@ const JSONBIN_HEADERS = {
 };
 
 /**
- * JSONBin からカードを読み込んでページに復元する。
+ * JSONBin からすべてのデータを一括で読み込んで復元する。
  * ページ読み込み直後に呼ばれる。
  */
 async function loadCardsFromServer() {
-  try {
-    const res = await fetch(`${JSONBIN_URL}/latest`, {
-      headers: JSONBIN_HEADERS,
-    });
-    if (!res.ok) throw new Error(`fetch error: ${res.status}`);
-    const data = await res.json();
-    const works = data?.record?.works ?? [];
+  const record = await fetchCurrentRecord();
 
-    const worksSections = document.querySelectorAll("section#works");
+  // 実績カードの復元
+  const works = record?.works ?? [];
+  const worksSections = document.querySelectorAll("section#works");
+  works.forEach((item) => {
+    const section = worksSections[item.sectionIndex];
+    if (!section) return;
+    const worksList = section.querySelector(".works-list");
+    if (!worksList) return;
+    const card = buildWorkCard(item);
+    card.dataset.adminAdded = "true";
+    worksList.appendChild(card);
+    card.classList.add("fade-up");
+    requestAnimationFrame(() => card.classList.add("visible"));
+  });
 
-    works.forEach((item) => {
-      const section = worksSections[item.sectionIndex];
-      if (!section) return;
-      const worksList = section.querySelector(".works-list");
-      if (!worksList) return;
-
-      const card = buildWorkCard(item);
-      card.dataset.adminAdded = "true";
-      worksList.appendChild(card);
-
-      // IntersectionObserver に登録してフェードイン対象にする
-      card.classList.add("fade-up");
-      requestAnimationFrame(() => {
-        card.classList.add("visible");
-      });
-    });
-  } catch (err) {
-    console.error("カードの読み込みに失敗しました:", err);
-  }
+  // 自己紹介・スキルの復元
+  await loadAboutFromServer(record);
+  await loadSkillsFromServer(record);
 }
 
 /**
@@ -415,9 +465,327 @@ async function saveCardsToServer() {
   }
 }
 
-// ページ読み込み時にサーバーからカードを復元
+// ページ読み込み時にサーバーから全データを復元
 loadCardsFromServer();
 
 // ===========================
 // /JSONBin
+// ===========================
+
+// ===========================
+// 自己紹介・スキル編集機能
+// 削除したい場合：ここから /自己紹介・スキル編集 まで全部消す
+// ===========================
+
+// --- 自己紹介：クリックで直接編集 ---
+
+function enableAboutEdit() {
+  const paragraphs = document.querySelectorAll(".about-card p");
+  paragraphs.forEach((p) => {
+    p.contentEditable = "true";
+    p.classList.add("editable-active");
+    p.addEventListener("blur", onAboutBlur, { once: false });
+  });
+}
+
+function disableAboutEdit() {
+  const paragraphs = document.querySelectorAll(".about-card p");
+  paragraphs.forEach((p) => {
+    p.contentEditable = "false";
+    p.classList.remove("editable-active");
+    p.removeEventListener("blur", onAboutBlur);
+  });
+}
+
+function onAboutBlur() {
+  saveAboutToServer();
+}
+
+async function saveAboutToServer() {
+  const paragraphs = document.querySelectorAll(".about-card p");
+  const texts = [...paragraphs].map((p) => p.textContent.trim());
+  const record = await fetchCurrentRecord();
+  record.about = texts;
+  await putRecord(record);
+}
+
+async function loadAboutFromServer(record) {
+  const texts = record?.about;
+  if (!texts || !Array.isArray(texts)) return;
+  const paragraphs = document.querySelectorAll(".about-card p");
+  texts.forEach((text, i) => {
+    if (paragraphs[i]) paragraphs[i].textContent = text;
+  });
+}
+
+// --- スキル：追加・編集・削除 ---
+
+function enableSkillEdit() {
+  // 既存カードに編集・削除ボタンを付ける
+  document.querySelectorAll(".skill-card").forEach((card) => {
+    attachSkillButtons(card);
+  });
+
+  // ＋追加ボタンを表示
+  const grid = document.querySelector(".skill-grid");
+  if (grid && !grid.querySelector(".admin-skill-add-btn")) {
+    const addBtn = document.createElement("button");
+    addBtn.className = "admin-skill-add-btn";
+    addBtn.textContent = "+ スキル追加";
+    addBtn.addEventListener("click", () => openSkillModal(null));
+    grid.appendChild(addBtn);
+  }
+}
+
+function disableSkillEdit() {
+  document
+    .querySelectorAll(
+      ".skill-edit-btn, .skill-delete-btn, .admin-skill-add-btn",
+    )
+    .forEach((el) => el.remove());
+  document.querySelectorAll(".skill-card").forEach((card) => {
+    card.style.position = "";
+  });
+}
+
+function attachSkillButtons(card) {
+  if (card.querySelector(".skill-edit-btn")) return;
+  card.style.position = "relative";
+
+  const editBtn = document.createElement("button");
+  editBtn.className = "skill-edit-btn";
+  editBtn.textContent = "✏️";
+  editBtn.title = "編集";
+  editBtn.addEventListener("click", () => openSkillModal(card));
+  card.appendChild(editBtn);
+
+  // data-admin-added のカードのみ削除可能
+  if (card.dataset.adminAdded === "true") {
+    const delBtn = document.createElement("button");
+    delBtn.className = "skill-delete-btn";
+    delBtn.textContent = "🗑";
+    delBtn.title = "削除";
+    delBtn.addEventListener("click", () => {
+      if (!confirm("このスキルを削除しますか？")) return;
+      card.style.transition = "opacity 0.3s";
+      card.style.opacity = "0";
+      setTimeout(() => {
+        card.remove();
+        saveSkillsToServer();
+      }, 300);
+    });
+    card.appendChild(delBtn);
+  }
+}
+
+// スキルモーダルを開く（card=nullなら新規追加）
+let editingSkillCard = null;
+
+function openSkillModal(card) {
+  editingSkillCard = card;
+  const modal = document.getElementById("skillEditModal");
+
+  if (card) {
+    const name = card.querySelector(".skill-name")?.textContent ?? "";
+    const level = card.querySelector(".skill-level")?.textContent ?? "";
+    const barEl = card.querySelector(".skill-bar");
+    const width = barEl ? parseInt(barEl.style.width) : 0;
+    const tag = card.querySelector(".skill-tag")?.textContent ?? "";
+    document.getElementById("skillName").value = name;
+    document.getElementById("skillLevel").value = level;
+    document.getElementById("skillPercent").value = width;
+    document.getElementById("skillPercentVal").textContent = width + "%";
+    document.getElementById("skillTag").value = tag;
+  } else {
+    document.getElementById("skillName").value = "";
+    document.getElementById("skillLevel").value = "学習中";
+    document.getElementById("skillPercent").value = 0;
+    document.getElementById("skillPercentVal").textContent = "0%";
+    document.getElementById("skillTag").value = "";
+  }
+
+  modal.style.display = "flex";
+}
+
+function buildSkillCard(name, level, percent, tag) {
+  const card = document.createElement("div");
+  card.className = "skill-card fade-up";
+  card.dataset.adminAdded = "true";
+  card.innerHTML = `
+    <div class="skill-header">
+      <span class="skill-name">${name}</span>
+      <span class="skill-level">${level}</span>
+    </div>
+    <div class="skill-bar-bg">
+      <div class="skill-bar" style="width: ${percent}%"></div>
+    </div>
+    <p class="skill-tag">${tag}</p>
+  `;
+  return card;
+}
+
+async function saveSkillsToServer() {
+  const cards = document.querySelectorAll(".skill-card");
+  const skills = [...cards].map((card) => ({
+    name: card.querySelector(".skill-name")?.textContent?.trim() ?? "",
+    level: card.querySelector(".skill-level")?.textContent?.trim() ?? "",
+    percent: parseInt(card.querySelector(".skill-bar")?.style.width) || 0,
+    tag: card.querySelector(".skill-tag")?.textContent?.trim() ?? "",
+    adminAdded: card.dataset.adminAdded === "true",
+  }));
+  const record = await fetchCurrentRecord();
+  record.skills = skills;
+  await putRecord(record);
+}
+
+async function loadSkillsFromServer(record) {
+  const skills = record?.skills;
+  if (!skills || !Array.isArray(skills)) return;
+
+  const grid = document.querySelector(".skill-grid");
+  // HTMLに最初からある既存カード（adminAdded でないもの）
+  const existingCards = [
+    ...grid.querySelectorAll(".skill-card:not([data-admin-added])"),
+  ];
+  let existingIndex = 0;
+
+  skills.forEach((skill) => {
+    if (skill.adminAdded) {
+      // 管理者追加カードは新規生成
+      const card = buildSkillCard(
+        skill.name,
+        skill.level,
+        skill.percent,
+        skill.tag,
+      );
+      grid.appendChild(card);
+      requestAnimationFrame(() => card.classList.add("visible"));
+    } else {
+      // 既存カードを順番に更新
+      const c = existingCards[existingIndex++];
+      if (!c) return;
+      const nameEl = c.querySelector(".skill-name");
+      const levelEl = c.querySelector(".skill-level");
+      const barEl = c.querySelector(".skill-bar");
+      const tagEl = c.querySelector(".skill-tag");
+      if (nameEl) nameEl.textContent = skill.name;
+      if (levelEl) levelEl.textContent = skill.level;
+      if (barEl) barEl.style.width = skill.percent + "%";
+      if (tagEl) tagEl.textContent = skill.tag;
+    }
+  });
+}
+
+// --- JSONBin 共通ユーティリティ ---
+
+async function fetchCurrentRecord() {
+  try {
+    const res = await fetch(`${JSONBIN_URL}/latest`, {
+      headers: JSONBIN_HEADERS,
+    });
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data?.record ?? {};
+  } catch {
+    return {};
+  }
+}
+
+async function putRecord(record) {
+  try {
+    const res = await fetch(JSONBIN_URL, {
+      method: "PUT",
+      headers: JSONBIN_HEADERS,
+      body: JSON.stringify(record),
+    });
+    if (!res.ok) throw new Error(`save error: ${res.status}`);
+  } catch (err) {
+    console.error("保存に失敗しました:", err);
+    alert("保存に失敗しました。時間をおいて再度お試しください。");
+  }
+}
+
+// --- スキル編集モーダルのイベント ---
+
+document.addEventListener("DOMContentLoaded", () => {
+  const skillModal = document.getElementById("skillEditModal");
+  const skillCancelBtn = document.getElementById("skillEditCancelBtn");
+  const skillSaveBtn = document.getElementById("skillEditSaveBtn");
+  const skillPercent = document.getElementById("skillPercent");
+  const skillPercentVal = document.getElementById("skillPercentVal");
+
+  if (skillPercent) {
+    skillPercent.addEventListener("input", () => {
+      skillPercentVal.textContent = skillPercent.value + "%";
+    });
+  }
+
+  if (skillCancelBtn) {
+    skillCancelBtn.addEventListener("click", () => {
+      skillModal.style.display = "none";
+      editingSkillCard = null;
+    });
+  }
+
+  if (skillSaveBtn) {
+    skillSaveBtn.addEventListener("click", () => {
+      const name = document.getElementById("skillName").value.trim();
+      if (!name) {
+        alert("スキル名は必須です");
+        return;
+      }
+      const level =
+        document.getElementById("skillLevel").value.trim() || "学習中";
+      const percent =
+        parseInt(document.getElementById("skillPercent").value) || 0;
+      const tag = document.getElementById("skillTag").value.trim();
+
+      if (editingSkillCard) {
+        // 既存カードを更新
+        const nameEl = editingSkillCard.querySelector(".skill-name");
+        const levelEl = editingSkillCard.querySelector(".skill-level");
+        const barEl = editingSkillCard.querySelector(".skill-bar");
+        const tagEl = editingSkillCard.querySelector(".skill-tag");
+        if (nameEl) nameEl.textContent = name;
+        if (levelEl) levelEl.textContent = level;
+        if (barEl) barEl.style.width = percent + "%";
+        if (tagEl) tagEl.textContent = tag;
+      } else {
+        // 新規カードを追加
+        const grid = document.querySelector(".skill-grid");
+        const addBtn = grid.querySelector(".admin-skill-add-btn");
+        const card = buildSkillCard(name, level, percent, tag);
+        grid.insertBefore(card, addBtn);
+        requestAnimationFrame(() => card.classList.add("visible"));
+        attachSkillButtons(card);
+      }
+
+      skillModal.style.display = "none";
+      editingSkillCard = null;
+      saveSkillsToServer();
+    });
+  }
+});
+
+// --- enableAdminMode / disableAdminMode に編集機能を連携 ---
+// （元の関数をラップして上書き）
+
+const _origEnable = enableAdminMode;
+enableAdminMode = function () {
+  _origEnable();
+  enableAboutEdit();
+  enableSkillEdit();
+};
+
+const _origDisable = disableAdminMode;
+disableAdminMode = function () {
+  _origDisable();
+  disableAboutEdit();
+  disableSkillEdit();
+};
+
+// （復元は loadCardsFromServer にまとめて実行）
+
+// ===========================
+// /自己紹介・スキル編集
 // ===========================

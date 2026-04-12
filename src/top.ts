@@ -121,7 +121,7 @@ footerLogo.addEventListener("touchend", () => {
 
 function showAdminLoginModal() {
   const password = prompt("管理者パスワードを入力してください");
-  if (password === (window as any).CONFIG?.ADMIN_PASSWORD) {
+  if (password === (window as any).CONFIG?.admin123) {
     enableAdminMode();
   } else if (password !== null) {
     alert("パスワードが違います");

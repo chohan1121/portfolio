@@ -1,10 +1,11 @@
 "use strict";
 
-const keyInput = document.getElementById("web3formsKey") as HTMLInputElement;
-if (keyInput) {
-  keyInput.value = (window as any).CONFIG?.WEB3FORMS_KEY ?? "";
-}
-addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", () => {
+  const keyInput = document.getElementById("web3formsKey") as HTMLInputElement;
+  if (keyInput) {
+    keyInput.value = (window as any).CONFIG?.WEB3FORMS_KEY ?? "";
+  }
+
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {

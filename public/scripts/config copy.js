@@ -1,4 +1,4 @@
-const CONFIG = {
+window.CONFIG = {
   WEB3FORMS_KEY: "your-web3forms-key-here",
   ADMIN_PASSWORD: "your-password-here",
 

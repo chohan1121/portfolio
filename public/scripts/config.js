@@ -1,4 +1,5 @@
-const CONFIG = {
+// constをvarに変更するか、windowに直接代入
+window.CONFIG = {
   WEB3FORMS_KEY: "35762b13-f103-4e24-a806-0b13a9259d2c",
   ADMIN_PASSWORD: "tyohan1121",
 

@@ -408,9 +408,14 @@ async function loadCardsFromServer() {
     requestAnimationFrame(() => card.classList.add("visible"));
   });
 
-  // 自己紹介・スキルの復元
+  // 自己紹介・スキル・ヒーロー・ページビューの復元
   await loadAboutFromServer(record);
   await loadSkillsFromServer(record);
+  await loadHeroFromServer(record);
+  await loadPageView(record);
+
+  // スキルバーアニメーション（復元後に実行）
+  initSkillBarAnimation();
 }
 
 /**
@@ -465,8 +470,9 @@ async function saveCardsToServer() {
   }
 }
 
-// ページ読み込み時にサーバーから全データを復元
+// ページ読み込み時にサーバーから全データを復元 ＋ PV加算
 loadCardsFromServer();
+incrementPageView();
 
 // ===========================
 // /JSONBin
@@ -768,13 +774,13 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // --- enableAdminMode / disableAdminMode に編集機能を連携 ---
-// （元の関数をラップして上書き）
-
 const _origEnable = enableAdminMode;
 enableAdminMode = function () {
   _origEnable();
   enableAboutEdit();
   enableSkillEdit();
+  enableHeroEdit();
+  enableDragAndDrop();
 };
 
 const _origDisable = disableAdminMode;
@@ -782,10 +788,281 @@ disableAdminMode = function () {
   _origDisable();
   disableAboutEdit();
   disableSkillEdit();
+  disableHeroEdit();
+  disableDragAndDrop();
 };
 
 // （復元は loadCardsFromServer にまとめて実行）
 
 // ===========================
 // /自己紹介・スキル編集
+// ===========================
+
+// ===========================
+// ① ヒーロー編集（肩書き・バッジ）
+// ===========================
+
+function enableHeroEdit() {
+  // 肩書きをクリック編集
+  const tagline = document.querySelector(".hero-tagline");
+  if (tagline) {
+    tagline.contentEditable = "true";
+    tagline.classList.add("editable-active");
+    tagline.addEventListener("blur", saveHeroToServer);
+  }
+
+  // バッジエリアに「＋バッジ追加」ボタンを表示
+  const heroTags = document.querySelector(".hero-tags");
+  if (heroTags && !heroTags.querySelector(".admin-badge-add-btn")) {
+    // 既存バッジに削除ボタンを付ける
+    heroTags
+      .querySelectorAll(".badge")
+      .forEach((badge) => attachBadgeDeleteBtn(badge));
+
+    const addBtn = document.createElement("button");
+    addBtn.className = "admin-badge-add-btn";
+    addBtn.textContent = "+ バッジ追加";
+    addBtn.addEventListener("click", () => openBadgeModal());
+    heroTags.appendChild(addBtn);
+  }
+}
+
+function disableHeroEdit() {
+  const tagline = document.querySelector(".hero-tagline");
+  if (tagline) {
+    tagline.contentEditable = "false";
+    tagline.classList.remove("editable-active");
+    tagline.removeEventListener("blur", saveHeroToServer);
+  }
+  document
+    .querySelectorAll(".admin-badge-add-btn, .badge-delete-btn")
+    .forEach((el) => el.remove());
+}
+
+function attachBadgeDeleteBtn(badge) {
+  if (badge.querySelector(".badge-delete-btn")) return;
+  badge.style.position = "relative";
+  const btn = document.createElement("button");
+  btn.className = "badge-delete-btn";
+  btn.textContent = "✕";
+  btn.title = "削除";
+  btn.addEventListener("click", () => {
+    badge.remove();
+    saveHeroToServer();
+  });
+  badge.appendChild(btn);
+}
+
+// バッジ追加モーダル（シンプルなpromptで対応）
+const BADGE_COLORS = ["gray", "purple", "blue", "pink", "green", "amber"];
+
+function openBadgeModal() {
+  const text = prompt("バッジのテキストを入力してください");
+  if (!text || !text.trim()) return;
+
+  const colorChoice = prompt(
+    `色を選んでください（番号で入力）\n1: グレー\n2: パープル\n3: ブルー\n4: ピンク\n5: グリーン\n6: アンバー`,
+    "1",
+  );
+  const colorIndex = parseInt(colorChoice) - 1;
+  const color = BADGE_COLORS[colorIndex] ?? "gray";
+
+  const badge = document.createElement("span");
+  badge.className = `badge badge-${color}`;
+  badge.textContent = text.trim();
+
+  const heroTags = document.querySelector(".hero-tags");
+  const addBtn = heroTags.querySelector(".admin-badge-add-btn");
+  heroTags.insertBefore(badge, addBtn);
+  attachBadgeDeleteBtn(badge);
+  saveHeroToServer();
+}
+
+async function saveHeroToServer() {
+  const tagline =
+    document.querySelector(".hero-tagline")?.textContent?.trim() ?? "";
+  const badges = [...document.querySelectorAll(".hero-tags .badge")].map(
+    (b) => ({
+      text:
+        b.childNodes[0]?.textContent?.trim() ??
+        b.textContent.replace("✕", "").trim(),
+      color:
+        [...b.classList]
+          .find((c) => c.startsWith("badge-") && c !== "badge")
+          ?.replace("badge-", "") ?? "gray",
+    }),
+  );
+  const record = await fetchCurrentRecord();
+  record.hero = { tagline, badges };
+  await putRecord(record);
+}
+
+async function loadHeroFromServer(record) {
+  const hero = record?.hero;
+  if (!hero) return;
+
+  if (hero.tagline) {
+    const tagline = document.querySelector(".hero-tagline");
+    if (tagline) tagline.textContent = hero.tagline;
+  }
+
+  if (Array.isArray(hero.badges) && hero.badges.length > 0) {
+    const heroTags = document.querySelector(".hero-tags");
+    // 既存バッジを削除して復元
+    heroTags.querySelectorAll(".badge").forEach((b) => b.remove());
+    hero.badges.forEach((b) => {
+      const badge = document.createElement("span");
+      badge.className = `badge badge-${b.color}`;
+      badge.textContent = b.text;
+      heroTags.appendChild(badge);
+    });
+  }
+}
+
+// ===========================
+// /ヒーロー編集
+// ===========================
+
+// ===========================
+// ② ドラッグ&ドロップ並び替え（実績・制作物）
+// ===========================
+
+let dragSrcEl = null;
+
+function enableDragAndDrop() {
+  document.querySelectorAll(".works-list").forEach((list) => {
+    list.querySelectorAll(".work-card").forEach((card) => attachDrag(card));
+    // MutationObserver で後から追加されたカードにも適用
+    list._dragObserver = new MutationObserver((mutations) => {
+      mutations.forEach((m) => {
+        m.addedNodes.forEach((node) => {
+          if (node.classList?.contains("work-card")) attachDrag(node);
+        });
+      });
+    });
+    list._dragObserver.observe(list, { childList: true });
+  });
+}
+
+function disableDragAndDrop() {
+  document.querySelectorAll(".work-card").forEach((card) => {
+    card.draggable = false;
+    card.classList.remove("dragging");
+  });
+  document.querySelectorAll(".works-list").forEach((list) => {
+    if (list._dragObserver) {
+      list._dragObserver.disconnect();
+      delete list._dragObserver;
+    }
+  });
+}
+
+function attachDrag(card) {
+  card.draggable = true;
+
+  card.addEventListener("dragstart", (e) => {
+    dragSrcEl = card;
+    card.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+  });
+
+  card.addEventListener("dragend", () => {
+    card.classList.remove("dragging");
+    document
+      .querySelectorAll(".work-card.drag-over")
+      .forEach((c) => c.classList.remove("drag-over"));
+    dragSrcEl = null;
+    saveCardsToServer();
+  });
+
+  card.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragSrcEl && dragSrcEl !== card) {
+      card.classList.add("drag-over");
+    }
+  });
+
+  card.addEventListener("dragleave", () => {
+    card.classList.remove("drag-over");
+  });
+
+  card.addEventListener("drop", (e) => {
+    e.preventDefault();
+    card.classList.remove("drag-over");
+    if (!dragSrcEl || dragSrcEl === card) return;
+    const list = card.closest(".works-list");
+    if (!list) return;
+    const cards = [...list.querySelectorAll(".work-card")];
+    const srcIdx = cards.indexOf(dragSrcEl);
+    const tgtIdx = cards.indexOf(card);
+    if (srcIdx < tgtIdx) {
+      list.insertBefore(dragSrcEl, card.nextSibling);
+    } else {
+      list.insertBefore(dragSrcEl, card);
+    }
+  });
+}
+
+// ===========================
+// /ドラッグ&ドロップ
+// ===========================
+
+// ===========================
+// ③ ページビューカウンター
+// ===========================
+
+async function incrementPageView() {
+  const record = await fetchCurrentRecord();
+  const count = (record?.pageviews ?? 0) + 1;
+  record.pageviews = count;
+  await putRecord(record);
+  renderPageView(count);
+}
+
+function renderPageView(count) {
+  const el = document.getElementById("pageViewCount");
+  if (el) el.textContent = count.toLocaleString();
+}
+
+async function loadPageView(record) {
+  const count = record?.pageviews ?? 0;
+  renderPageView(count);
+}
+
+// ===========================
+// /ページビューカウンター
+// ===========================
+
+// ===========================
+// ④ スキルバーアニメーション修正
+// ===========================
+
+function initSkillBarAnimation() {
+  const bars = document.querySelectorAll(".skill-bar");
+  // 実際の幅を data-width に退避して初期値を0にする
+  bars.forEach((bar) => {
+    const target = bar.style.width || "0%";
+    bar.dataset.targetWidth = target;
+    bar.style.width = "0%";
+  });
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const bar = entry.target;
+          bar.style.width = bar.dataset.targetWidth;
+          observer.unobserve(bar);
+        }
+      });
+    },
+    { threshold: 0.3 },
+  );
+
+  bars.forEach((bar) => observer.observe(bar));
+}
+
+// ===========================
+// /スキルバーアニメーション
 // ===========================

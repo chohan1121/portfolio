@@ -1,6 +1,10 @@
 "use strict";
 
-document.addEventListener("DOMContentLoaded", () => {
+const keyInput = document.getElementById("web3formsKey") as HTMLInputElement;
+if (keyInput) {
+  keyInput.value = (window as any).CONFIG?.WEB3FORMS_KEY ?? "";
+}
+addEventListener("DOMContentLoaded", () => {
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
@@ -121,7 +125,7 @@ footerLogo.addEventListener("touchend", () => {
 
 function showAdminLoginModal() {
   const password = prompt("管理者パスワードを入力してください");
-  if (password === (window as any).CONFIG?.admin123) {
+  if (password === (window as any).CONFIG?.ADMIN_PASSWORD) {
     enableAdminMode();
   } else if (password !== null) {
     alert("パスワードが違います");

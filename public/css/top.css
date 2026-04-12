@@ -770,3 +770,129 @@ body.admin-mode {
 /* ===========================
   /管理者モード
 =========================== */
+
+/* ===========================
+  管理者：アイテム追加モーダル CSS
+=========================== */
+
+.add-item-modal-content {
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.add-item-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1e1b4b;
+  margin-bottom: 20px;
+}
+
+.add-item-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.add-item-label .required {
+  color: #dc2626;
+}
+
+/* アイコン選択エリア */
+.icon-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.icon-option {
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+  padding: 0;
+}
+
+.icon-option:hover {
+  border-color: var(--primary-light);
+  background: var(--primary-bg);
+}
+
+.icon-option.selected {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+}
+
+/* カラー選択エリア */
+.color-picker {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.color-option {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    border-color 0.15s;
+  padding: 0;
+}
+
+.color-option:hover {
+  transform: scale(1.15);
+}
+
+.color-option.selected {
+  border-color: var(--primary);
+  transform: scale(1.15);
+}
+
+/* テキスト入力 */
+.add-item-modal-content input[type="text"],
+.add-item-modal-content input[type="url"],
+.add-item-modal-content textarea {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text-main);
+  background: white;
+  transition: border-color 0.15s;
+}
+
+.add-item-modal-content input[type="text"]:focus,
+.add-item-modal-content input[type="url"]:focus,
+.add-item-modal-content textarea:focus {
+  outline: none;
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.add-item-modal-content textarea {
+  resize: none;
+}
+
+/* ===========================
+  /管理者：アイテム追加モーダル
+=========================== */

@@ -255,6 +255,108 @@
         <a href="#contact">連絡</a>
       </div>
     </footer>
+    <!-- 管理者：アイテム追加モーダル -->
+    <div id="addItemModal" class="modal-overlay">
+      <div class="modal-content add-item-modal-content">
+        <h3 class="add-item-modal-title">カードを追加</h3>
+
+        <label class="add-item-label">アイコン</label>
+        <div class="icon-picker" id="iconPicker">
+          <button type="button" class="icon-option selected" data-icon="💼">
+            💼
+          </button>
+          <button type="button" class="icon-option" data-icon="🌐">🌐</button>
+          <button type="button" class="icon-option" data-icon="🔐">🔐</button>
+          <button type="button" class="icon-option" data-icon="🔧">🔧</button>
+          <button type="button" class="icon-option" data-icon="📱">📱</button>
+          <button type="button" class="icon-option" data-icon="🎓">🎓</button>
+          <button type="button" class="icon-option" data-icon="🚀">🚀</button>
+          <button type="button" class="icon-option" data-icon="📊">📊</button>
+          <button type="button" class="icon-option" data-icon="🤖">🤖</button>
+        </div>
+
+        <label class="add-item-label" for="addItemColor">アイコンの色</label>
+        <div class="color-picker" id="colorPicker">
+          <button
+            type="button"
+            class="color-option selected"
+            data-color="purple"
+            style="background: #ede9fe"
+            title="パープル"
+          ></button>
+          <button
+            type="button"
+            class="color-option"
+            data-color="blue"
+            style="background: #dbeafe"
+            title="ブルー"
+          ></button>
+          <button
+            type="button"
+            class="color-option"
+            data-color="green"
+            style="background: #d1fae5"
+            title="グリーン"
+          ></button>
+          <button
+            type="button"
+            class="color-option"
+            data-color="amber"
+            style="background: #fef3c7"
+            title="アンバー"
+          ></button>
+          <button
+            type="button"
+            class="color-option"
+            data-color="pink"
+            style="background: #fce7f3"
+            title="ピンク"
+          ></button>
+        </div>
+
+        <label class="add-item-label" for="addItemTitle"
+          >タイトル <span class="required">*</span></label
+        >
+        <input
+          type="text"
+          id="addItemTitle"
+          placeholder="例：個人開発プロジェクト"
+          maxlength="40"
+        />
+
+        <label class="add-item-label" for="addItemSub">説明文</label>
+        <textarea
+          id="addItemSub"
+          rows="3"
+          placeholder="例：〇〇を使ったWebアプリです"
+          maxlength="120"
+        ></textarea>
+
+        <label class="add-item-label" for="addItemUrl">URL（任意）</label>
+        <input type="url" id="addItemUrl" placeholder="https://..." />
+
+        <label class="add-item-label" for="addItemTags"
+          >タグ（カンマ区切り）</label
+        >
+        <input
+          type="text"
+          id="addItemTags"
+          placeholder="例：HTML, CSS, JavaScript"
+        />
+
+        <p id="addItemStatus" class="form-status"></p>
+
+        <div class="modal-actions">
+          <button type="button" id="closeAddItemModalBtn" class="btn-cancel">
+            キャンセル
+          </button>
+          <button type="button" id="submitAddItemBtn" class="btn-submit">
+            追加する
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="scripts/config.js"></script>
     <script src="scripts/top.js"></script>
   </body>

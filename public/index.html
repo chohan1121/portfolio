@@ -32,7 +32,8 @@
       <p class="hero-tagline">Developer &amp; Researcher ／ DX推進</p>
 
       <div class="hero-tags">
-        <span class="badge badge-purple">個人事業主</span>
+        <span class="badge badge-gray">九州工業大学</span>
+        <span class="badge badge-purple">大学4年生</span>
         <span class="badge badge-blue">研究者</span>
         <span class="badge badge-pink">インターン中</span>
         <span class="badge badge-green">DX推進</span>
@@ -169,7 +170,7 @@
               <p class="work-title">使い捨てテキスト（ページ遷移します）</p>
             </a>
             <p class="work-sub">
-              一回のみ閲覧できるメモや画像変換等ができるシンプルなツールです（このHPからとんだ場合、3回までしか使えません）
+              一回のみ閲覧できるメモや画像変換等ができるシンプルなツールです（このHPからとんだ場合、3回/日までしか使えません）
             </p>
             <div class="work-tags">
               <span class="work-tag">HTML</span>
@@ -206,9 +207,44 @@
       <div class="contact-card fade-up">
         <h3>お気軽にご連絡ください</h3>
         <p>お仕事・DX相談・共同研究など、なんでもどうぞ</p>
-        <a href="chohan161121@email.com" class="contact-btn">メールを送る</a>
+        <a href="#" id="openModalBtn" class="contact-btn">メールを送る</a>
       </div>
     </section>
+
+    <div id="contactModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3 style="color: #333; margin-top: 0">お問い合わせ</h3>
+        <form
+          id="contactForm"
+          action="https://api.web3forms.com/submit"
+          method="POST"
+        >
+          <input type="hidden" name="access_key" value="CONFIG.WEB3FORMS_KEY" />
+
+          <input
+            type="email"
+            name="email"
+            placeholder="メールアドレスを入力してください"
+            required
+          />
+          <textarea
+            name="message"
+            rows="5"
+            placeholder="メッセージ内容"
+            required
+          ></textarea>
+
+          <p id="formStatus" class="form-status"></p>
+
+          <div class="modal-actions">
+            <button type="button" id="closeModalBtn" class="btn-cancel">
+              キャンセル
+            </button>
+            <button type="submit" class="btn-submit">送信する</button>
+          </div>
+        </form>
+      </div>
+    </div>
     <footer>
       <p class="footer-name">張　帆 / Cho Han</p>
       <p class="footer-sub">Developer &amp; Researcher</p>
@@ -219,6 +255,7 @@
         <a href="#contact">連絡</a>
       </div>
     </footer>
+    <script src="scripts/config.js"></script>
     <script src="scripts/top.js"></script>
   </body>
 </html>

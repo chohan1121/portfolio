@@ -643,3 +643,130 @@ footer {
     gap: 16px;
   }
 }
+
+/*=============================
+ モーダル全体のオーバーレイ 
+ =============================*/
+
+.modal-overlay {
+  display: none; /* 初期状態は非表示 */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+}
+
+/* モーダルの白い箱 */
+.modal-content {
+  background: #fff;
+  padding: 24px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* 入力フォーム */
+.modal-content input,
+.modal-content textarea {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  color: #000;
+  font-family: inherit;
+}
+
+.modal-content textarea {
+  resize: none;
+}
+
+/* ボタン群 */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn-cancel {
+  padding: 8px 16px;
+  background: #eee;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-submit {
+  padding: 8px 16px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form-status {
+  text-align: center;
+  font-weight: bold;
+  margin-bottom: 15px;
+  display: none;
+}
+
+/* ===========================
+  管理者モード CSS
+  削除したい場合：ここから /管理者モード まで全部消す
+=========================== */
+
+/* ③ ページ全体に出る薄い紫の枠 */
+body.admin-mode {
+  outline: 3px solid rgba(79, 70, 229, 0.5);
+  outline-offset: -3px;
+}
+
+/* ① ナビに出る「管理モード中」バッジ */
+.admin-badge {
+  background: #4f46e5;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 99px;
+  margin-left: 12px;
+}
+
+/* ② 各セクションの＋追加ボタン */
+.admin-add-btn {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px;
+  background: transparent;
+  border: 2px dashed #818cf8;
+  border-radius: 8px;
+  color: #4f46e5;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.admin-add-btn:hover {
+  background: #eef2ff;
+}
+
+/* ===========================
+  /管理者モード
+=========================== */

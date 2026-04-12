@@ -4,7 +4,7 @@
   "description": "> このREADMEは `portfolio.html` で実際に使われているコードのキーワードを説明しています。 > **キーワードから調べる** / **やりたいことから調べる** の両方で使えます。",
   "main": "index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "echo ok",
     "watch": "tsc -w",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

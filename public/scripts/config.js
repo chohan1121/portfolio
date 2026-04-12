@@ -1,5 +1,5 @@
 const CONFIG = {
-  WEB3FORMS_KEY: "your-web3forms-key-here",
+  WEB3FORMS_KEY: "35762b13-f103-4e24-a806-0b13a9259d2c",
   ADMIN_PASSWORD: "tyohan1121",
 
   SITE_NAME: "張 帆 | ポートフォリオ",

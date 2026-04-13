@@ -71,6 +71,11 @@ form.addEventListener("submit", async (e) => {
       statusText.style.color = "#16a34a";
       statusText.style.display = "block";
 
+      // お問い合わせ履歴をJSONBinに保存
+      const emailVal = formData.get("email") ?? "";
+      const msgVal = formData.get("message") ?? "";
+      saveInquiryToServer(String(emailVal), String(msgVal));
+
       setTimeout(() => {
         closeBtn.click();
         form
@@ -202,11 +207,42 @@ function attachDeleteButton(card) {
   btn.textContent = "🗑";
   btn.addEventListener("click", () => {
     if (!confirm("このカードを削除しますか？")) return;
+
+    // Undo用にデータを退避
+    const iconEl = card.querySelector(".work-icon");
+    const titleEl = card.querySelector(".work-title");
+    const subEl = card.querySelector(".work-sub");
+    const linkEl = card.querySelector("a[href]");
+    const tagEls = card.querySelectorAll(".work-tag");
+    const colorClass = [...(iconEl?.classList ?? [])].find((c) =>
+      c.startsWith("work-icon-"),
+    );
+    const color = colorClass ? colorClass.replace("work-icon-", "") : "purple";
+    const rawTitle = titleEl?.textContent ?? "";
+    const worksSections = [...document.querySelectorAll("section#works")];
+    const sectionIndex = worksSections.indexOf(card.closest("section#works"));
+    const list = card.closest(".works-list");
+    const insertIndex = list
+      ? [...list.querySelectorAll(".work-card")].indexOf(card)
+      : 0;
+
+    pushUndo("delete-work", {
+      sectionIndex,
+      insertIndex,
+      icon: iconEl?.textContent?.trim() ?? "💼",
+      color,
+      title: rawTitle.replace("（ページ遷移します）", "").trim(),
+      sub: subEl?.textContent?.trim() ?? "",
+      url: linkEl?.getAttribute("href") ?? "",
+      tags: [...tagEls].map((t) => t.textContent.trim()),
+    });
+
     card.style.transition = "opacity 0.3s";
     card.style.opacity = "0";
     setTimeout(() => {
       card.remove();
       saveCardsToServer();
+      showToast("🗑 削除しました　↩ 元に戻すで復元できます");
     }, 300);
   });
   card.style.position = "relative";
@@ -391,31 +427,35 @@ const JSONBIN_HEADERS = {
  * ページ読み込み直後に呼ばれる。
  */
 async function loadCardsFromServer() {
-  const record = await fetchCurrentRecord();
+  try {
+    const record = await fetchCurrentRecord();
 
-  // 実績カードの復元
-  const works = record?.works ?? [];
-  const worksSections = document.querySelectorAll("section#works");
-  works.forEach((item) => {
-    const section = worksSections[item.sectionIndex];
-    if (!section) return;
-    const worksList = section.querySelector(".works-list");
-    if (!worksList) return;
-    const card = buildWorkCard(item);
-    card.dataset.adminAdded = "true";
-    worksList.appendChild(card);
-    card.classList.add("fade-up");
-    requestAnimationFrame(() => card.classList.add("visible"));
-  });
+    // 実績カードの復元
+    const works = record?.works ?? [];
+    const worksSections = document.querySelectorAll("section#works");
+    works.forEach((item) => {
+      const section = worksSections[item.sectionIndex];
+      if (!section) return;
+      const worksList = section.querySelector(".works-list");
+      if (!worksList) return;
+      const card = buildWorkCard(item);
+      card.dataset.adminAdded = "true";
+      worksList.appendChild(card);
+      card.classList.add("fade-up");
+      requestAnimationFrame(() => card.classList.add("visible"));
+    });
 
-  // 自己紹介・スキル・ヒーロー・ページビューの復元
-  await loadAboutFromServer(record);
-  await loadSkillsFromServer(record);
-  await loadHeroFromServer(record);
-  await loadPageView(record);
+    // 自己紹介・スキル・ヒーロー・ページビューの復元
+    await loadAboutFromServer(record);
+    await loadSkillsFromServer(record);
+    await loadHeroFromServer(record);
+    await loadPageView(record);
 
-  // スキルバーアニメーション（復元後に実行）
-  initSkillBarAnimation();
+    // スキルバーアニメーション（復元後に実行）
+    initSkillBarAnimation();
+  } catch (err) {
+    console.error("データの読み込みに失敗しました:", err);
+  }
 }
 
 /**
@@ -573,11 +613,26 @@ function attachSkillButtons(card) {
     delBtn.title = "削除";
     delBtn.addEventListener("click", () => {
       if (!confirm("このスキルを削除しますか？")) return;
+
+      // Undo用にデータを退避
+      const grid = card.closest(".skill-grid");
+      const insertIndex = grid
+        ? [...grid.querySelectorAll(".skill-card")].indexOf(card)
+        : 0;
+      pushUndo("delete-skill", {
+        name: card.querySelector(".skill-name")?.textContent?.trim() ?? "",
+        level: card.querySelector(".skill-level")?.textContent?.trim() ?? "",
+        percent: parseInt(card.querySelector(".skill-bar")?.style.width) || 0,
+        tag: card.querySelector(".skill-tag")?.textContent?.trim() ?? "",
+        insertIndex,
+      });
+
       card.style.transition = "opacity 0.3s";
       card.style.opacity = "0";
       setTimeout(() => {
         card.remove();
         saveSkillsToServer();
+        showToast("🗑 削除しました　↩ 元に戻すで復元できます");
       }, 300);
     });
     card.appendChild(delBtn);
@@ -682,33 +737,61 @@ async function loadSkillsFromServer(record) {
   });
 }
 
-// --- JSONBin 共通ユーティリティ ---
+// --- JSONBin 共通ユーティリティ（キャッシュ・タイムアウト・フォールバック統合版）---
+
+// メモリキャッシュ（ページ内で1回だけfetchする）
+var _recordCache = null;
 
 async function fetchCurrentRecord() {
+  if (_recordCache !== null) return JSON.parse(JSON.stringify(_recordCache));
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const res = await fetch(`${JSONBIN_URL}/latest`, {
+    const res = await fetch(JSONBIN_URL + "/latest", {
       headers: JSONBIN_HEADERS,
+      signal: controller.signal,
     });
-    if (!res.ok) return {};
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error("fetch error: " + res.status);
     const data = await res.json();
-    return data?.record ?? {};
-  } catch {
+    _recordCache = data && data.record ? data.record : {};
+    localStorage.setItem("portfolio_cache", JSON.stringify(_recordCache));
+    return JSON.parse(JSON.stringify(_recordCache));
+  } catch (err) {
+    clearTimeout(timeout);
+    console.warn("JSONBin接続失敗、キャッシュから復元します:", err);
+    var cached = localStorage.getItem("portfolio_cache");
+    if (cached) {
+      try {
+        _recordCache = JSON.parse(cached);
+        return JSON.parse(JSON.stringify(_recordCache));
+      } catch (e) {
+        return {};
+      }
+    }
     return {};
   }
 }
 
 async function putRecord(record) {
+  _recordCache = JSON.parse(JSON.stringify(record));
+  localStorage.setItem("portfolio_cache", JSON.stringify(_recordCache));
   try {
     const res = await fetch(JSONBIN_URL, {
       method: "PUT",
       headers: JSONBIN_HEADERS,
       body: JSON.stringify(record),
     });
-    if (!res.ok) throw new Error(`save error: ${res.status}`);
+    if (!res.ok) throw new Error("save error: " + res.status);
   } catch (err) {
     console.error("保存に失敗しました:", err);
     alert("保存に失敗しました。時間をおいて再度お試しください。");
   }
+}
+
+function clearRecordCache() {
+  _recordCache = null;
 }
 
 // --- スキル編集モーダルのイベント ---
@@ -781,6 +864,7 @@ enableAdminMode = function () {
   enableSkillEdit();
   enableHeroEdit();
   enableDragAndDrop();
+  enableSkillDragAndDrop();
 };
 
 const _origDisable = disableAdminMode;
@@ -790,6 +874,7 @@ disableAdminMode = function () {
   disableSkillEdit();
   disableHeroEdit();
   disableDragAndDrop();
+  disableSkillDragAndDrop();
 };
 
 // （復元は loadCardsFromServer にまとめて実行）
@@ -973,7 +1058,10 @@ function attachDrag(card) {
       .forEach((c) => c.classList.remove("drag-over"));
     dragSrcEl = null;
     saveCardsToServer();
+    showToast("並び順を保存しました");
   });
+
+  attachTouchDrag(card);
 
   card.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -1065,4 +1153,753 @@ function initSkillBarAnimation() {
 
 // ===========================
 // /スキルバーアニメーション
+// ===========================
+
+// ===========================
+// ⑤ スキル ドラッグ&ドロップ
+// ===========================
+
+let skillDragSrc = null;
+
+function enableSkillDragAndDrop() {
+  const grid = document.querySelector(".skill-grid");
+  if (!grid) return;
+  grid.querySelectorAll(".skill-card").forEach((card) => attachSkillDrag(card));
+
+  grid._skillDragObserver = new MutationObserver((mutations) => {
+    mutations.forEach((m) => {
+      m.addedNodes.forEach((node) => {
+        if (node.classList?.contains("skill-card")) attachSkillDrag(node);
+      });
+    });
+  });
+  grid._skillDragObserver.observe(grid, { childList: true });
+}
+
+function disableSkillDragAndDrop() {
+  document.querySelectorAll(".skill-card").forEach((card) => {
+    card.draggable = false;
+    card.classList.remove("dragging", "drag-over");
+  });
+  const grid = document.querySelector(".skill-grid");
+  if (grid?._skillDragObserver) {
+    grid._skillDragObserver.disconnect();
+    delete grid._skillDragObserver;
+  }
+}
+
+function attachSkillDrag(card) {
+  card.draggable = true;
+
+  card.addEventListener("dragstart", (e) => {
+    skillDragSrc = card;
+    card.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+  });
+
+  card.addEventListener("dragend", () => {
+    card.classList.remove("dragging");
+    document
+      .querySelectorAll(".skill-card.drag-over")
+      .forEach((c) => c.classList.remove("drag-over"));
+    skillDragSrc = null;
+    saveSkillsToServer();
+    showToast("並び順を保存しました");
+  });
+
+  card.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    if (skillDragSrc && skillDragSrc !== card) card.classList.add("drag-over");
+  });
+
+  card.addEventListener("dragleave", () => card.classList.remove("drag-over"));
+
+  card.addEventListener("drop", (e) => {
+    e.preventDefault();
+    card.classList.remove("drag-over");
+    if (!skillDragSrc || skillDragSrc === card) return;
+    const grid = card.closest(".skill-grid");
+    if (!grid) return;
+    const cards = [...grid.querySelectorAll(".skill-card")];
+    const srcIdx = cards.indexOf(skillDragSrc);
+    const tgtIdx = cards.indexOf(card);
+    if (srcIdx < tgtIdx) {
+      grid.insertBefore(skillDragSrc, card.nextSibling);
+    } else {
+      grid.insertBefore(skillDragSrc, card);
+    }
+  });
+
+  // スマホ対応（touch events）
+  let touchStartY = 0;
+  card.addEventListener(
+    "touchstart",
+    (e) => {
+      skillDragSrc = card;
+      touchStartY = e.touches[0].clientY;
+      card.classList.add("dragging");
+    },
+    { passive: true },
+  );
+
+  card.addEventListener(
+    "touchmove",
+    (e) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const target = el?.closest(".skill-card");
+      document
+        .querySelectorAll(".skill-card.drag-over")
+        .forEach((c) => c.classList.remove("drag-over"));
+      if (target && target !== skillDragSrc) target.classList.add("drag-over");
+    },
+    { passive: false },
+  );
+
+  card.addEventListener("touchend", (e) => {
+    card.classList.remove("dragging");
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const target = el?.closest(".skill-card");
+    document
+      .querySelectorAll(".skill-card.drag-over")
+      .forEach((c) => c.classList.remove("drag-over"));
+    if (target && target !== skillDragSrc) {
+      const grid = target.closest(".skill-grid");
+      if (grid) {
+        const cards = [...grid.querySelectorAll(".skill-card")];
+        const srcIdx = cards.indexOf(skillDragSrc);
+        const tgtIdx = cards.indexOf(target);
+        if (srcIdx < tgtIdx) {
+          grid.insertBefore(skillDragSrc, target.nextSibling);
+        } else {
+          grid.insertBefore(skillDragSrc, target);
+        }
+      }
+    }
+    skillDragSrc = null;
+    saveSkillsToServer();
+    showToast("並び順を保存しました");
+  });
+}
+
+// ===========================
+// /スキル ドラッグ&ドロップ
+// ===========================
+
+// ===========================
+// ⑥ 実績カード スマホ対応 D&D（touch）
+// ===========================
+
+function attachTouchDrag(card) {
+  let touchSrc = null;
+
+  card.addEventListener(
+    "touchstart",
+    (e) => {
+      touchSrc = card;
+      card.classList.add("dragging");
+    },
+    { passive: true },
+  );
+
+  card.addEventListener(
+    "touchmove",
+    (e) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const target = el?.closest(".work-card");
+      document
+        .querySelectorAll(".work-card.drag-over")
+        .forEach((c) => c.classList.remove("drag-over"));
+      if (target && target !== touchSrc) target.classList.add("drag-over");
+    },
+    { passive: false },
+  );
+
+  card.addEventListener("touchend", (e) => {
+    card.classList.remove("dragging");
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const target = el?.closest(".work-card");
+    document
+      .querySelectorAll(".work-card.drag-over")
+      .forEach((c) => c.classList.remove("drag-over"));
+    if (target && target !== touchSrc) {
+      const list = target.closest(".works-list");
+      if (list) {
+        const cards = [...list.querySelectorAll(".work-card")];
+        const srcIdx = cards.indexOf(touchSrc);
+        const tgtIdx = cards.indexOf(target);
+        if (srcIdx < tgtIdx) {
+          list.insertBefore(touchSrc, target.nextSibling);
+        } else {
+          list.insertBefore(touchSrc, target);
+        }
+      }
+    }
+    touchSrc = null;
+    saveCardsToServer();
+    showToast("並び順を保存しました");
+  });
+}
+
+// ===========================
+// /スマホ対応 D&D
+// ===========================
+
+// ===========================
+// ⑦ トースト通知
+// ===========================
+
+function showToast(message, isError = false) {
+  const existing = document.getElementById("adminToast");
+  if (existing) existing.remove();
+
+  const toast = document.createElement("div");
+  toast.id = "adminToast";
+  toast.className = "admin-toast" + (isError ? " admin-toast-error" : "");
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add("show"));
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+}
+
+// putRecord・saveCardsToServer・saveSkillsToServer・saveAboutToServer・saveHeroToServer にトーストを追加
+const _origPutRecord = putRecord;
+putRecord = async function (record) {
+  await _origPutRecord(record);
+  showToast("✅ 保存しました");
+};
+
+// ===========================
+// /トースト通知
+// ===========================
+
+// ===========================
+// ⑧ 削除取り消し（Undo）
+// ===========================
+
+let undoStack = [];
+const MAX_UNDO = 10;
+
+function pushUndo(type, data) {
+  undoStack.push({ type, data });
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  updateUndoBtn();
+}
+
+function updateUndoBtn() {
+  const btn = document.getElementById("adminUndoBtn");
+  if (btn) btn.disabled = undoStack.length === 0;
+}
+
+function showUndoButton() {
+  if (document.getElementById("adminUndoBtn")) return;
+  const btn = document.createElement("button");
+  btn.id = "adminUndoBtn";
+  btn.className = "admin-undo-btn";
+  btn.textContent = "↩ 元に戻す";
+  btn.disabled = true;
+  btn.addEventListener("click", performUndo);
+  document.body.appendChild(btn);
+}
+
+function hideUndoButton() {
+  const btn = document.getElementById("adminUndoBtn");
+  if (btn) btn.remove();
+  undoStack = [];
+}
+
+async function performUndo() {
+  const last = undoStack.pop();
+  if (!last) return;
+  updateUndoBtn();
+
+  if (last.type === "delete-work") {
+    // 実績カードを復元
+    const section =
+      document.querySelectorAll("section#works")[last.data.sectionIndex];
+    if (!section) return;
+    const worksList = section.querySelector(".works-list");
+    const card = buildWorkCard(last.data);
+    card.dataset.adminAdded = "true";
+    if (last.data.insertBefore) {
+      const ref = worksList.children[last.data.insertIndex];
+      worksList.insertBefore(card, ref ?? null);
+    } else {
+      worksList.appendChild(card);
+    }
+    requestAnimationFrame(() => card.classList.add("visible"));
+    if (isAdminMode) {
+      attachDeleteButton(card);
+      attachDrag(card);
+      attachTouchDrag(card);
+    }
+    await saveCardsToServer();
+    showToast("↩ 元に戻しました");
+  } else if (last.type === "delete-skill") {
+    // スキルカードを復元
+    const grid = document.querySelector(".skill-grid");
+    const addBtn = grid.querySelector(".admin-skill-add-btn");
+    const card = buildSkillCard(
+      last.data.name,
+      last.data.level,
+      last.data.percent,
+      last.data.tag,
+    );
+    const ref = grid.querySelectorAll(".skill-card")[last.data.insertIndex];
+    grid.insertBefore(card, ref ?? addBtn ?? null);
+    requestAnimationFrame(() => card.classList.add("visible"));
+    if (isAdminMode) {
+      attachSkillButtons(card);
+      attachSkillDrag(card);
+    }
+    await saveSkillsToServer();
+    showToast("↩ 元に戻しました");
+  }
+}
+
+// enableAdminMode / disableAdminMode にUndo連携
+const _origEnable2 = enableAdminMode;
+enableAdminMode = function () {
+  _origEnable2();
+  showUndoButton();
+};
+
+const _origDisable2 = disableAdminMode;
+disableAdminMode = function () {
+  _origDisable2();
+  hideUndoButton();
+};
+
+// ===========================
+// /削除取り消し（Undo）
+// ===========================
+
+// ===========================
+// ⑨ お問い合わせ履歴
+// ===========================
+
+async function saveInquiryToServer(email, message) {
+  const record = await fetchCurrentRecord();
+  if (!Array.isArray(record.inquiries)) record.inquiries = [];
+  record.inquiries.unshift({
+    email,
+    message,
+    date: new Date().toLocaleString("ja-JP"),
+  });
+  // 最大50件まで保持
+  if (record.inquiries.length > 50)
+    record.inquiries = record.inquiries.slice(0, 50);
+  await putRecord(record);
+}
+
+function showInquiryHistory() {
+  const existing = document.getElementById("inquiryModal");
+  if (existing) {
+    existing.style.display = "flex";
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.id = "inquiryModal";
+  overlay.className = "modal-overlay";
+  overlay.style.display = "flex";
+
+  const box = document.createElement("div");
+  box.className = "modal-content inquiry-modal-content";
+  box.innerHTML = `<h3 style="margin-top:0;color:#1e1b4b">📬 お問い合わせ履歴</h3><div id="inquiryList"><p style="color:#6b7280;font-size:14px">読み込み中...</p></div><div class="modal-actions" style="margin-top:16px"><button class="btn-cancel" id="closeInquiryBtn">閉じる</button></div>`;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  document.getElementById("closeInquiryBtn").addEventListener("click", () => {
+    overlay.style.display = "none";
+  });
+
+  // データ取得して表示
+  fetchCurrentRecord().then((record) => {
+    const list = record?.inquiries ?? [];
+    const el = document.getElementById("inquiryList");
+    if (list.length === 0) {
+      el.innerHTML = `<p style="color:#6b7280;font-size:14px">まだお問い合わせはありません</p>`;
+      return;
+    }
+    el.innerHTML = list
+      .map(
+        (item) => `
+      <div class="inquiry-item">
+        <div class="inquiry-meta">
+          <span class="inquiry-email">${escapeHtml(item.email)}</span>
+          <span class="inquiry-date">${escapeHtml(item.date)}</span>
+        </div>
+        <p class="inquiry-message">${escapeHtml(item.message)}</p>
+      </div>
+    `,
+      )
+      .join("");
+  });
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// 管理者バッジに「履歴」ボタンを追加
+const _origShowAdminBadge = showAdminBadge;
+showAdminBadge = function () {
+  _origShowAdminBadge();
+  const nav = document.querySelector("nav");
+  const historyBtn = document.createElement("button");
+  historyBtn.className = "admin-history-btn";
+  historyBtn.textContent = "📬 履歴";
+  historyBtn.id = "adminHistoryBtn";
+  historyBtn.addEventListener("click", showInquiryHistory);
+  nav.appendChild(historyBtn);
+};
+
+const _origDisableForHistory = disableAdminMode;
+disableAdminMode = function () {
+  _origDisableForHistory();
+  const historyBtn = document.getElementById("adminHistoryBtn");
+  if (historyBtn) historyBtn.remove();
+  const modal = document.getElementById("inquiryModal");
+  if (modal) modal.remove();
+};
+
+// ===========================
+// /お問い合わせ履歴
+// ===========================
+
+// ===========================
+// ③ スキルバー数値表示
+// ===========================
+
+function initSkillPercents() {
+  document.querySelectorAll(".skill-card").forEach((card) => {
+    attachSkillPercent(card);
+  });
+}
+
+function attachSkillPercent(card) {
+  if (card.querySelector(".skill-percent-label")) return;
+  const bar = card.querySelector(".skill-bar");
+  if (!bar) return;
+  const label = document.createElement("span");
+  label.className = "skill-percent-label";
+  // data-targetWidth がある場合はそちらを使う（アニメーション前）
+  const pct = bar.dataset.targetWidth ?? bar.style.width ?? "0%";
+  label.textContent = pct;
+  const barBg = card.querySelector(".skill-bar-bg");
+  if (barBg) barBg.after(label);
+}
+
+// loadSkillsFromServer 後に呼べるよう、loadCardsFromServer からも呼ぶ
+const _origInitSkillBar = initSkillBarAnimation;
+initSkillBarAnimation = function () {
+  _origInitSkillBar();
+  initSkillPercents();
+  // バーが伸びるたびにラベルも更新（MutationObserver）
+  document.querySelectorAll(".skill-bar").forEach((bar) => {
+    const observer = new MutationObserver(() => {
+      const card = bar.closest(".skill-card");
+      const label = card?.querySelector(".skill-percent-label");
+      if (label)
+        label.textContent = bar.dataset.targetWidth ?? bar.style.width ?? "0%";
+    });
+    observer.observe(bar, { attributes: true, attributeFilter: ["style"] });
+  });
+};
+
+// ===========================
+// /スキルバー数値表示
+// ===========================
+
+// ===========================
+// ④ スケルトン表示
+// ===========================
+
+function showSkeleton() {
+  // works-list と skill-grid にスケルトンを挿入
+  document.querySelectorAll(".works-list").forEach((list) => {
+    for (let i = 0; i < 2; i++) {
+      const sk = document.createElement("div");
+      sk.className = "skeleton-card";
+      sk.dataset.skeleton = "true";
+      sk.innerHTML = `<div class="sk-icon"></div><div class="sk-body"><div class="sk-line sk-line-wide"></div><div class="sk-line sk-line-mid"></div><div class="sk-line sk-line-narrow"></div></div>`;
+      list.appendChild(sk);
+    }
+  });
+}
+
+function removeSkeleton() {
+  document
+    .querySelectorAll("[data-skeleton='true']")
+    .forEach((el) => el.remove());
+}
+
+// ページ読み込み時にスケルトンを表示（DOMContentLoaded後すぐ）
+document.addEventListener("DOMContentLoaded", showSkeleton);
+
+// ===========================
+// /スケルトン表示
+// ===========================
+
+// ===========================
+// ⑤ バックアップ機能
+// ===========================
+
+function initBackupButton() {
+  // 管理者モード時にバックアップボタンをナビに追加
+}
+
+async function downloadBackup() {
+  const record = await fetchCurrentRecord();
+  const json = JSON.stringify(record, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `portfolio-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast("📦 バックアップをダウンロードしました");
+}
+
+// 管理者バッジにバックアップボタンを追加
+const _origShowAdminBadge2 = showAdminBadge;
+showAdminBadge = function () {
+  _origShowAdminBadge2();
+  const nav = document.querySelector("nav");
+  const backupBtn = document.createElement("button");
+  backupBtn.className = "admin-history-btn";
+  backupBtn.textContent = "📦 バックアップ";
+  backupBtn.id = "adminBackupBtn";
+  backupBtn.addEventListener("click", downloadBackup);
+  nav.appendChild(backupBtn);
+};
+
+const _origDisableForBackup = disableAdminMode;
+disableAdminMode = function () {
+  _origDisableForBackup();
+  const btn = document.getElementById("adminBackupBtn");
+  if (btn) btn.remove();
+};
+
+// ===========================
+// /バックアップ機能
+// ===========================
+
+// ===========================
+// ⑥ エラー時フォールバック
+// ===========================
+
+// ===========================
+// /エラー時フォールバック（fetchCurrentRecord に統合済み）
+// ===========================
+
+// ===========================
+// コピーライト年 自動更新
+// ===========================
+
+document.addEventListener("DOMContentLoaded", () => {
+  const el = document.getElementById("footerCopy");
+  if (el) el.textContent = `© ${new Date().getFullYear()} 張 帆 / Cho Han`;
+});
+
+// ===========================
+// /コピーライト年
+// ===========================
+
+// ===========================
+// ⑦ 訪問者リファラー記録
+// ===========================
+
+async function recordReferrer() {
+  const ref = document.referrer;
+  let source = "直接アクセス";
+  if (ref) {
+    try {
+      const host = new URL(ref).hostname;
+      if (host.includes("google")) source = "Google";
+      else if (host.includes("twitter") || host.includes("x.com"))
+        source = "X (Twitter)";
+      else if (host.includes("line")) source = "LINE";
+      else if (host.includes("facebook")) source = "Facebook";
+      else if (host.includes("instagram")) source = "Instagram";
+      else source = host;
+    } catch {
+      source = ref;
+    }
+  }
+
+  const record = await fetchCurrentRecord();
+  if (!Array.isArray(record.referrers)) record.referrers = [];
+  record.referrers.unshift({
+    source,
+    date: new Date().toLocaleString("ja-JP"),
+    path: location.pathname,
+  });
+  // 最大100件
+  if (record.referrers.length > 100)
+    record.referrers = record.referrers.slice(0, 100);
+  await putRecord(record);
+}
+
+// 管理者モード：リファラー履歴を表示
+function showReferrerHistory() {
+  const existing = document.getElementById("referrerModal");
+  if (existing) {
+    existing.style.display = "flex";
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.id = "referrerModal";
+  overlay.className = "modal-overlay";
+  overlay.style.display = "flex";
+
+  const box = document.createElement("div");
+  box.className = "modal-content inquiry-modal-content";
+  box.innerHTML = `
+    <h3 style="margin-top:0;color:#1e1b4b">📊 アクセス元一覧</h3>
+    <div id="referrerList"><p style="color:#6b7280;font-size:14px">読み込み中...</p></div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn-cancel" id="closeReferrerBtn">閉じる</button>
+    </div>`;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  document.getElementById("closeReferrerBtn").addEventListener("click", () => {
+    overlay.style.display = "none";
+  });
+
+  fetchCurrentRecord().then((record) => {
+    const list = record?.referrers ?? [];
+    const el = document.getElementById("referrerList");
+    if (list.length === 0) {
+      el.innerHTML = `<p style="color:#6b7280;font-size:14px">まだデータがありません</p>`;
+      return;
+    }
+    // 集計
+    const counts = {};
+    list.forEach((r) => {
+      counts[r.source] = (counts[r.source] ?? 0) + 1;
+    });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const total = list.length;
+    el.innerHTML = `
+      <p style="font-size:12px;color:var(--text-sub);margin-bottom:12px">直近${total}件の集計</p>
+      ${sorted
+        .map(
+          ([src, cnt]) => `
+        <div class="referrer-item">
+          <span class="referrer-source">${escapeHtml(src)}</span>
+          <div class="referrer-bar-wrap">
+            <div class="referrer-bar" style="width:${Math.round((cnt / total) * 100)}%"></div>
+          </div>
+          <span class="referrer-count">${cnt}回</span>
+        </div>`,
+        )
+        .join("")}
+      <details style="margin-top:12px">
+        <summary style="font-size:12px;color:var(--text-sub);cursor:pointer">詳細ログを見る</summary>
+        <div style="margin-top:8px">
+          ${list
+            .map(
+              (r) => `
+            <div class="inquiry-item" style="margin-bottom:6px">
+              <div class="inquiry-meta">
+                <span class="inquiry-email">${escapeHtml(r.source)}</span>
+                <span class="inquiry-date">${escapeHtml(r.date)}</span>
+              </div>
+            </div>`,
+            )
+            .join("")}
+        </div>
+      </details>`;
+  });
+}
+
+// 管理者バッジにリファラーボタンを追加
+const _origShowAdminBadge3 = showAdminBadge;
+showAdminBadge = function () {
+  _origShowAdminBadge3();
+  const nav = document.querySelector("nav");
+  const btn = document.createElement("button");
+  btn.className = "admin-history-btn";
+  btn.textContent = "📊 流入元";
+  btn.id = "adminReferrerBtn";
+  btn.addEventListener("click", showReferrerHistory);
+  nav.appendChild(btn);
+};
+
+const _origDisableForReferrer = disableAdminMode;
+disableAdminMode = function () {
+  _origDisableForReferrer();
+  const btn = document.getElementById("adminReferrerBtn");
+  if (btn) btn.remove();
+  const modal = document.getElementById("referrerModal");
+  if (modal) modal.remove();
+};
+
+// ページ読み込み時にリファラーを記録（loadCardsFromServer完了後）
+const _origLoadCards = loadCardsFromServer;
+loadCardsFromServer = async function () {
+  try {
+    await _origLoadCards();
+  } finally {
+    removeSkeleton();
+    recordReferrer();
+  }
+};
+
+// ===========================
+// /訪問者リファラー記録
+// ===========================
+
+// ===========================
+// ⑧ コピーライト年 自動更新（フッター）
+// すでに /コピーライト年 で実装済み
+// ===========================
+
+// ===========================
+// ⑨ 管理者モード セッション維持
+// ===========================
+
+// ページ読み込み時にsessionStorageから管理者モードを復元
+document.addEventListener("DOMContentLoaded", () => {
+  if (sessionStorage.getItem("adminMode") === "true") {
+    // 少し遅延させてDOM・JS初期化完了後に有効化
+    setTimeout(() => {
+      enableAdminMode();
+    }, 500);
+  }
+});
+
+// enableAdminMode / disableAdminMode にsessionStorage連携
+const _origEnableForSession = enableAdminMode;
+enableAdminMode = function () {
+  _origEnableForSession();
+  sessionStorage.setItem("adminMode", "true");
+};
+
+const _origDisableForSession = disableAdminMode;
+disableAdminMode = function () {
+  _origDisableForSession();
+  sessionStorage.removeItem("adminMode");
+};
+
+// ===========================
+// /管理者モード セッション維持
 // ===========================

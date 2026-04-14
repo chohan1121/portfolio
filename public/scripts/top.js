@@ -1106,21 +1106,28 @@ function attachDrag(card) {
 // ===========================
 
 async function incrementPageView() {
-  const record = await fetchCurrentRecord();
-  const count = (record?.pageviews ?? 0) + 1;
-  record.pageviews = count;
-  await putRecord(record);
-  renderPageView(count);
+  try {
+    // RPC で pageviews を +1（競合しないようにサーバー側でインクリメント）
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_pageview`, {
+      method: "POST",
+      headers: { ...SUPABASE_HEADERS, Prefer: "return=representation" },
+      body: JSON.stringify({ row_id: 1 }),
+    });
+    if (!res.ok) throw new Error("increment error: " + res.status);
+    const count = await res.json();
+    renderPageView(count);
+  } catch (err) {
+    console.warn("ページビューの更新に失敗しました:", err);
+  }
 }
 
 function renderPageView(count) {
   const el = document.getElementById("pageViewCount");
-  if (el) el.textContent = count.toLocaleString();
+  if (el) el.textContent = Number(count).toLocaleString();
 }
 
 async function loadPageView(record) {
-  const count = record?.pageviews ?? 0;
-  renderPageView(count);
+  // loadCardsFromServer経由では使わず、incrementPageViewで兼ねる
 }
 
 // ===========================

@@ -416,10 +416,12 @@ function buildWorkCard(item) {
 // 削除したい場合：ここから /JSONBin まで全部消す
 // ===========================
 
-const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${window.CONFIG?.JSONBIN_BIN_ID}`;
-const JSONBIN_HEADERS = {
+const SUPABASE_URL = window.CONFIG?.SUPABASE_URL ?? "";
+const SUPABASE_ANON_KEY = window.CONFIG?.SUPABASE_ANON_KEY ?? "";
+const SUPABASE_HEADERS = {
   "Content-Type": "application/json",
-  "X-Master-Key": window.CONFIG?.JSONBIN_SECRET_KEY ?? "",
+  apikey: SUPABASE_ANON_KEY,
+  Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
 };
 
 /**
@@ -498,12 +500,12 @@ async function saveCardsToServer() {
   });
 
   try {
-    const res = await fetch(JSONBIN_URL, {
-      method: "PUT",
-      headers: JSONBIN_HEADERS,
-      body: JSON.stringify({ works }),
-    });
-    if (!res.ok) throw new Error(`save error: ${res.status}`);
+    const record = await fetchCurrentRecord();
+    record.works = works;
+    await putRecord(record);
+    return;
+    // ダミー（以下はputRecord内でエラー処理済み）
+    if (false) throw new Error();
   } catch (err) {
     console.error("カードの保存に失敗しました:", err);
     alert("保存に失敗しました。時間をおいて再度お試しください。");
@@ -737,39 +739,42 @@ async function loadSkillsFromServer(record) {
   });
 }
 
-// --- JSONBin 共通ユーティリティ（キャッシュ・タイムアウト・フォールバック統合版）---
+// --- Supabase 共通ユーティリティ（キャッシュ・タイムアウト・フォールバック統合版）---
 
 // メモリキャッシュ（ページ内で1回だけfetchする）
 var _recordCache = null;
 
 async function fetchCurrentRecord() {
-  if (_recordCache !== null) return JSON.parse(JSON.stringify(_recordCache));
+  if (_recordCache !== null && _recordCache !== undefined) {
+    return JSON.parse(JSON.stringify(_recordCache));
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const res = await fetch(JSONBIN_URL + "/latest", {
-      headers: JSONBIN_HEADERS,
-      signal: controller.signal,
-    });
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/portfolio_data?id=eq.1&select=data`,
+      { headers: SUPABASE_HEADERS, signal: controller.signal },
+    );
     clearTimeout(timeout);
     if (!res.ok) throw new Error("fetch error: " + res.status);
-    const data = await res.json();
-    _recordCache = data && data.record ? data.record : {};
+    const rows = await res.json();
+    _recordCache = rows[0]?.data ?? {};
     localStorage.setItem("portfolio_cache", JSON.stringify(_recordCache));
     return JSON.parse(JSON.stringify(_recordCache));
   } catch (err) {
     clearTimeout(timeout);
-    console.warn("JSONBin接続失敗、キャッシュから復元します:", err);
-    var cached = localStorage.getItem("portfolio_cache");
-    if (cached) {
+    console.warn("Supabase接続失敗、キャッシュから復元します:", err);
+    const cached = localStorage.getItem("portfolio_cache");
+    if (cached && cached !== "undefined") {
       try {
         _recordCache = JSON.parse(cached);
         return JSON.parse(JSON.stringify(_recordCache));
       } catch (e) {
-        return {};
+        // キャッシュが壊れていた場合は空で返す
       }
     }
+    _recordCache = {};
     return {};
   }
 }
@@ -778,10 +783,10 @@ async function putRecord(record) {
   _recordCache = JSON.parse(JSON.stringify(record));
   localStorage.setItem("portfolio_cache", JSON.stringify(_recordCache));
   try {
-    const res = await fetch(JSONBIN_URL, {
-      method: "PUT",
-      headers: JSONBIN_HEADERS,
-      body: JSON.stringify(record),
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/portfolio_data?id=eq.1`, {
+      method: "PATCH",
+      headers: { ...SUPABASE_HEADERS, Prefer: "return=minimal" },
+      body: JSON.stringify({ data: record }),
     });
     if (!res.ok) throw new Error("save error: " + res.status);
   } catch (err) {
@@ -1488,17 +1493,16 @@ disableAdminMode = function () {
 // ===========================
 
 async function saveInquiryToServer(email, message) {
-  const record = await fetchCurrentRecord();
-  if (!Array.isArray(record.inquiries)) record.inquiries = [];
-  record.inquiries.unshift({
-    email,
-    message,
-    date: new Date().toLocaleString("ja-JP"),
-  });
-  // 最大50件まで保持
-  if (record.inquiries.length > 50)
-    record.inquiries = record.inquiries.slice(0, 50);
-  await putRecord(record);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/inquiries`, {
+      method: "POST",
+      headers: { ...SUPABASE_HEADERS, Prefer: "return=minimal" },
+      body: JSON.stringify({ email, message }),
+    });
+    if (!res.ok) throw new Error("inquiry save error: " + res.status);
+  } catch (err) {
+    console.error("お問い合わせの保存に失敗しました:", err);
+  }
 }
 
 function showInquiryHistory() {
@@ -1524,27 +1528,31 @@ function showInquiryHistory() {
   });
 
   // データ取得して表示
-  fetchCurrentRecord().then((record) => {
-    const list = record?.inquiries ?? [];
-    const el = document.getElementById("inquiryList");
-    if (list.length === 0) {
-      el.innerHTML = `<p style="color:#6b7280;font-size:14px">まだお問い合わせはありません</p>`;
-      return;
-    }
-    el.innerHTML = list
-      .map(
-        (item) => `
+  fetch(
+    `${SUPABASE_URL}/rest/v1/inquiries?select=email,message,created_at&order=created_at.desc&limit=50`,
+    { headers: SUPABASE_HEADERS },
+  )
+    .then((r) => r.json())
+    .then((list) => {
+      const el = document.getElementById("inquiryList");
+      if (list.length === 0) {
+        el.innerHTML = `<p style="color:#6b7280;font-size:14px">まだお問い合わせはありません</p>`;
+        return;
+      }
+      el.innerHTML = list
+        .map(
+          (item) => `
       <div class="inquiry-item">
         <div class="inquiry-meta">
           <span class="inquiry-email">${escapeHtml(item.email)}</span>
-          <span class="inquiry-date">${escapeHtml(item.date)}</span>
+          <span class="inquiry-date">${escapeHtml(new Date(item.created_at).toLocaleString("ja-JP"))}</span>
         </div>
         <p class="inquiry-message">${escapeHtml(item.message)}</p>
       </div>
     `,
-      )
-      .join("");
-  });
+        )
+        .join("");
+    });
 }
 
 function escapeHtml(str) {
@@ -1743,17 +1751,15 @@ async function recordReferrer() {
     }
   }
 
-  const record = await fetchCurrentRecord();
-  if (!Array.isArray(record.referrers)) record.referrers = [];
-  record.referrers.unshift({
-    source,
-    date: new Date().toLocaleString("ja-JP"),
-    path: location.pathname,
-  });
-  // 最大100件
-  if (record.referrers.length > 100)
-    record.referrers = record.referrers.slice(0, 100);
-  await putRecord(record);
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/referrers`, {
+      method: "POST",
+      headers: { ...SUPABASE_HEADERS, Prefer: "return=minimal" },
+      body: JSON.stringify({ source, path: location.pathname }),
+    });
+  } catch (err) {
+    console.warn("リファラーの記録に失敗しました:", err);
+  }
 }
 
 // 管理者モード：リファラー履歴を表示
@@ -1784,21 +1790,25 @@ function showReferrerHistory() {
     overlay.style.display = "none";
   });
 
-  fetchCurrentRecord().then((record) => {
-    const list = record?.referrers ?? [];
-    const el = document.getElementById("referrerList");
-    if (list.length === 0) {
-      el.innerHTML = `<p style="color:#6b7280;font-size:14px">まだデータがありません</p>`;
-      return;
-    }
-    // 集計
-    const counts = {};
-    list.forEach((r) => {
-      counts[r.source] = (counts[r.source] ?? 0) + 1;
-    });
-    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    const total = list.length;
-    el.innerHTML = `
+  fetch(
+    `${SUPABASE_URL}/rest/v1/referrers?select=source,path,created_at&order=created_at.desc&limit=100`,
+    { headers: SUPABASE_HEADERS },
+  )
+    .then((r) => r.json())
+    .then((list) => {
+      const el = document.getElementById("referrerList");
+      if (list.length === 0) {
+        el.innerHTML = `<p style="color:#6b7280;font-size:14px">まだデータがありません</p>`;
+        return;
+      }
+      // 集計
+      const counts = {};
+      list.forEach((r) => {
+        counts[r.source] = (counts[r.source] ?? 0) + 1;
+      });
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      const total = list.length;
+      el.innerHTML = `
       <p style="font-size:12px;color:var(--text-sub);margin-bottom:12px">直近${total}件の集計</p>
       ${sorted
         .map(
@@ -1821,14 +1831,14 @@ function showReferrerHistory() {
             <div class="inquiry-item" style="margin-bottom:6px">
               <div class="inquiry-meta">
                 <span class="inquiry-email">${escapeHtml(r.source)}</span>
-                <span class="inquiry-date">${escapeHtml(r.date)}</span>
+                <span class="inquiry-date">${escapeHtml(new Date(r.created_at).toLocaleString("ja-JP"))}</span>
               </div>
             </div>`,
             )
             .join("")}
         </div>
       </details>`;
-  });
+    });
 }
 
 // 管理者バッジにリファラーボタンを追加

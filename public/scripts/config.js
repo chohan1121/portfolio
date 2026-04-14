@@ -11,9 +11,9 @@ window.CONFIG = {
   OWNER_NAME_EN: "Cho Han",
   SCROLL_THRESHOLD: 0.15,
 
-  // JSONBin.io（カードデータの保存先）
-  // ⚠️ キーを再発行したらここを更新してください
-  JSONBIN_SECRET_KEY:
-    "$2a$10$YCsjR29IKstSbLxv694SSOJJtq1fbh./qvZ8ZUVbXQZLUd8zG7Y0m",
-  JSONBIN_BIN_ID: "69dba562aaba882197eee0ff",
+  // Supabase（DBの保存先）
+  // ⚠️ Project Settings > API から取得してください
+  SUPABASE_URL: "https://zmdixlohdosskghdxwjd.supabase.co",
+  SUPABASE_ANON_KEY:
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptZGl4bG9oZG9zc2tnaGR4d2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5NzExNzcsImV4cCI6MjA5MTU0NzE3N30.hHUh9Gto7SK56hDoOGh_zxb5LuUmQsQR3zQ3G_4yBoM",
 };
